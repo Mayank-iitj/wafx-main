@@ -1,0 +1,89 @@
+# Vector configuration — log collection agent
+[api]
+enabled = true
+address = "0.0.0.0:8686"
+
+# ── Sources ──────────────────────────────────────────────────────────────
+
+[sources.syslog_udp]
+type = "syslog"
+address = "0.0.0.0:514"
+mode = "udp"
+
+[sources.syslog_tcp]
+type = "syslog"
+address = "0.0.0.0:5140"
+mode = "tcp"
+
+[sources.file_logs]
+type = "file"
+include = ["/var/log/**/*.log", "/var/log/syslog", "/var/log/auth.log"]
+read_from = "end"
+
+[sources.journald]
+type = "journald"
+current_boot_only = true
+
+[sources.docker_logs]
+type = "docker_logs"
+
+[sources.http_ingest]
+type = "http_server"
+address = "0.0.0.0:8080"
+encoding = "json"
+
+# ── Transforms ───────────────────────────────────────────────────────────
+
+[transforms.parse_syslog]
+type = "remap"
+inputs = ["syslog_udp", "syslog_tcp"]
+source = '''
+.source_type = "syslog"
+.source_name = .hostname ?? "unknown"
+.ingested_at = now()
+'''
+
+[transforms.parse_files]
+type = "remap"
+inputs = ["file_logs"]
+source = '''
+.source_type = "file"
+.source_name = .file ?? "unknown"
+.ingested_at = now()
+'''
+
+[transforms.parse_docker]
+type = "remap"
+inputs = ["docker_logs"]
+source = '''
+.source_type = "container"
+.source_name = .container_name ?? "unknown"
+.ingested_at = now()
+'''
+
+[transforms.parse_http]
+type = "remap"
+inputs = ["http_ingest"]
+source = '''
+.source_type = .source_type ?? "json"
+.source_name = .source_name ?? "http_ingest"
+.ingested_at = now()
+'''
+
+# ── Sinks ────────────────────────────────────────────────────────────────
+
+[sinks.kafka_raw]
+type = "kafka"
+inputs = ["parse_syslog", "parse_files", "parse_docker", "parse_http"]
+bootstrap_servers = "${KAFKA_BOOTSTRAP_SERVERS:-localhost:9092}"
+topic = "wafx.events.raw"
+encoding.codec = "json"
+compression = "lz4"
+batch.max_bytes = 1048576
+batch.timeout_secs = 1
+
+[sinks.console_debug]
+type = "console"
+inputs = ["parse_syslog", "parse_files"]
+encoding.codec = "json"
+target = "stdout"

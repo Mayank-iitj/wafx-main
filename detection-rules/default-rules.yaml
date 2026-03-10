@@ -1,0 +1,174 @@
+id: WAFX-RULE-001
+name: Brute Force SSH Login
+description: Detects multiple failed SSH login attempts from a single source IP
+mitre:
+  tactic: credential-access
+  technique: T1110.001
+type: threshold
+data_source: auth_logs
+conditions:
+  field: event.action
+  value: authentication_failure
+  threshold: 10
+  window: 300s
+  group_by: source.ip
+severity: high
+response:
+  - create_alert
+  - enrich_source_ip
+tags:
+  - brute_force
+  - ssh
+---
+id: WAFX-RULE-002
+name: Suspicious PowerShell Execution
+description: Detects encoded or obfuscated PowerShell commands
+mitre:
+  tactic: execution
+  technique: T1059.001
+type: simple
+data_source: process_logs
+conditions:
+  field: process.command_line
+  operator: regex
+  value: "(?i)(encodedcommand|bypass|hidden|noprofile|downloadstring|invoke-expression|iex)"
+severity: high
+response:
+  - create_alert
+tags:
+  - powershell
+  - execution
+---
+id: WAFX-RULE-003
+name: Lateral Movement via RDP
+description: Detects RDP connections between internal hosts
+mitre:
+  tactic: lateral-movement
+  technique: T1021.001
+type: correlation
+data_source: network_logs
+conditions:
+  events:
+    - type: rdp_connection
+      field: event.action
+      value: network_connection
+    - type: rdp_auth
+      field: destination.port
+      value: "3389"
+  window: 600s
+  group_by:
+    - source.ip
+    - destination.ip
+severity: medium
+response:
+  - create_alert
+  - enrich_source_ip
+tags:
+  - lateral_movement
+  - rdp
+---
+id: WAFX-RULE-004
+name: Data Exfiltration via DNS Tunneling
+description: Detects unusually long DNS queries indicating potential DNS tunneling
+mitre:
+  tactic: exfiltration
+  technique: T1048
+type: threshold
+data_source: dns_logs
+conditions:
+  field: dns.question.name
+  operator: regex
+  value: ".{50,}"
+  threshold: 20
+  window: 600s
+  group_by: source.ip
+severity: critical
+response:
+  - create_alert
+  - block_source_ip
+tags:
+  - dns_tunneling
+  - exfiltration
+---
+id: WAFX-RULE-005
+name: Ransomware File Encryption Activity
+description: Detects mass file rename operations typical of ransomware
+mitre:
+  tactic: impact
+  technique: T1486
+type: threshold
+data_source: file_logs
+conditions:
+  field: event.action
+  value: file_rename
+  threshold: 50
+  window: 60s
+  group_by: host.name
+severity: critical
+response:
+  - create_alert
+  - isolate_endpoint
+  - notify_soc
+tags:
+  - ransomware
+  - encryption
+---
+id: WAFX-RULE-006
+name: Privilege Escalation via sudo
+description: Detects sudo usage by non-admin users
+mitre:
+  tactic: privilege-escalation
+  technique: T1548
+type: simple
+data_source: auth_logs
+conditions:
+  field: process.name
+  value: sudo
+  operator: eq
+severity: medium
+response:
+  - create_alert
+tags:
+  - privesc
+  - sudo
+---
+id: WAFX-RULE-007
+name: Security Tool Disabled
+description: Detects attempts to disable security software
+mitre:
+  tactic: defense-evasion
+  technique: T1562
+type: simple
+data_source: process_logs
+conditions:
+  field: event.action
+  operator: regex
+  value: "(?i)(disable|stop|uninstall).*(antivirus|firewall|defender|sysmon|crowdstrike|sentinel)"
+severity: critical
+response:
+  - create_alert
+  - notify_soc
+tags:
+  - defense_evasion
+  - tool_disable
+---
+id: WAFX-RULE-008
+name: Credential Dumping Attempt
+description: Detects tools commonly used for credential dumping
+mitre:
+  tactic: credential-access
+  technique: T1003
+type: simple
+data_source: process_logs
+conditions:
+  field: process.name
+  operator: regex
+  value: "(?i)(mimikatz|procdump|lsass|secretsdump|hashdump)"
+severity: critical
+response:
+  - create_alert
+  - isolate_endpoint
+  - notify_soc
+tags:
+  - credential_dumping
+  - mimikatz

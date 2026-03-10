@@ -1,0 +1,50 @@
+# ── Stage 1: builder ───────────────────────────────────────────────────────
+FROM python:3.12-slim AS builder
+
+WORKDIR /build
+
+# System deps for psycopg2 / cryptography
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc libpq-dev build-essential curl && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies into /build/venv
+COPY pyproject.toml .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -e ".[dev]" --target /build/site-packages
+
+# ── Stage 2: runtime ───────────────────────────────────────────────────────
+FROM python:3.12-slim AS runtime
+
+WORKDIR /app
+
+# Runtime system deps only
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 curl && \
+    rm -rf /var/lib/apt/lists/*
+
+# Non-root user for security
+RUN groupadd -r wafx && useradd -r -g wafx -s /bin/false wafx
+
+# Copy installed packages from builder
+COPY --from=builder /build/site-packages /usr/local/lib/python3.12/site-packages
+
+# Copy application code
+COPY --chown=wafx:wafx . .
+
+USER wafx
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+  CMD curl -f http://localhost:8000/health || exit 1
+
+# Use gunicorn with uvicorn workers for production
+CMD ["gunicorn", "app.main:app", \
+     "--worker-class", "uvicorn.workers.UvicornWorker", \
+     "--workers", "4", \
+     "--bind", "0.0.0.0:8000", \
+     "--timeout", "120", \
+     "--log-level", "info", \
+     "--access-logfile", "-", \
+     "--error-logfile", "-"]

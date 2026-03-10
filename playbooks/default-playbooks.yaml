@@ -1,0 +1,60 @@
+id: PB-001
+name: Block Malicious IP
+description: Automatically block an IP when threat intelligence confirms it as malicious
+trigger:
+  alert_severity: critical
+  mitre_technique: T1190
+steps:
+  - action: lookup_threat_intel
+    input: "{{ alert.source_ip }}"
+  - action: block_ip
+    target: firewall
+    input: "{{ alert.source_ip }}"
+    condition: "{{ steps[0].confidence > 80 }}"
+  - action: notify
+    channel: slack
+    message: "🚨 Blocked malicious IP {{ alert.source_ip }} — {{ alert.title }}"
+  - action: create_ticket
+    system: jira
+    project: SEC
+    title: "Auto-blocked: {{ alert.title }}"
+---
+id: PB-002
+name: Ransomware Response
+description: Immediate response to ransomware detection — isolate, notify, escalate
+trigger:
+  alert_tags: ransomware
+  alert_severity: critical
+steps:
+  - action: isolate_endpoint
+    input: "{{ alert.host }}"
+  - action: disable_user
+    input: "{{ alert.user }}"
+    provider: ldap
+    continue_on_error: true
+  - action: notify
+    channel: slack
+    message: "🔴 RANSOMWARE DETECTED on {{ alert.host }} — endpoint isolated, user disabled"
+  - action: notify
+    channel: pagerduty
+    message: "Critical: Ransomware activity on {{ alert.host }}"
+  - action: create_ticket
+    system: jira
+    project: SEC
+    title: "CRITICAL: Ransomware on {{ alert.host }}"
+---
+id: PB-003
+name: Credential Dump Response
+description: Respond to credential dumping by isolating endpoint and revoking tokens
+trigger:
+  mitre_technique: T1003
+  alert_severity: critical
+steps:
+  - action: isolate_endpoint
+    input: "{{ alert.host }}"
+  - action: revoke_token
+    input: "{{ alert.user }}"
+  - action: enrich_alert
+  - action: notify
+    channel: slack
+    message: "🔒 Credential dump detected on {{ alert.host }} — endpoint isolated, tokens revoked"
