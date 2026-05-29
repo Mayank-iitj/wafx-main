@@ -1,0 +1,44 @@
+# render.yaml — HireMind AI Render Deployment Blueprint
+# Deploy this repo at: https://dashboard.render.com/new/blueprint
+
+services:
+  # ── Backend API (FastAPI) ──────────────────────────────────────────────────
+  - type: web
+    name: hiremind-ai-backend
+    runtime: python
+    rootDir: backend
+    pythonVersion: "3.11.0"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 2
+    plan: free
+    region: oregon
+    healthCheckPath: /health
+    envVars:
+      - key: AI_PROVIDER
+        value: groq
+      - key: GROQ_API_KEY
+        sync: false           # Set in Render dashboard → Environment
+      - key: DATABASE_URL
+        sync: false           # Set in Render dashboard → Environment
+      - key: SECRET_KEY
+        generateValue: true   # Render auto-generates a secure random value
+      - key: DEBUG
+        value: "false"
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: REDIS_URL
+        sync: false           # Upstash / Redis Cloud free tier URL
+      - key: QDRANT_URL
+        sync: false           # Qdrant Cloud free tier URL
+      - key: QDRANT_COLLECTION
+        value: candidate_embeddings
+      - key: NEO4J_URI
+        sync: false
+      - key: NEO4J_USER
+        sync: false
+      - key: NEO4J_PASSWORD
+        sync: false
+      - key: ALLOWED_ORIGINS
+        value: "https://hiremind-ai.vercel.app,http://localhost:5173"
